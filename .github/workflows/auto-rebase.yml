@@ -1,0 +1,87 @@
+name: Auto Rebase from Upstream
+
+on:
+  schedule:
+    # Run daily at 6:00 UTC (check for upstream changes once per day)
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to rebase (default: master)'
+        required: false
+        default: 'master'
+
+env:
+  UPSTREAM_URL: https://github.com/slskd/slskd.git
+  TARGET_BRANCH: ${{ github.event.inputs.branch || 'master' }}
+
+jobs:
+  rebase:
+    name: Rebase from upstream
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream ${{ env.UPSTREAM_URL }}
+          git fetch upstream
+
+      - name: Check for new upstream commits
+        id: check
+        run: |
+          FORK_HEAD=$(git rev-parse origin/${{ env.TARGET_BRANCH }})
+          UPSTREAM_HEAD=$(git rev-parse upstream/master)
+          
+          if [ "$FORK_HEAD" = "$UPSTREAM_HEAD" ]; then
+            echo "Fork is already up-to-date with upstream."
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "New commits found on upstream/master."
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "fork_head=$FORK_HEAD" >> $GITHUB_OUTPUT
+            echo "upstream_head=$UPSTREAM_HEAD" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Rebase fork onto upstream
+        if: steps.check.outputs.has_changes == 'true'
+        run: |
+          git checkout ${{ env.TARGET_BRANCH }}
+          git rebase upstream/master
+
+      - name: Push rebased branch
+        if: steps.check.outputs.has_changes == 'true'
+        run: |
+          git push origin ${{ env.TARGET_BRANCH }} --force-with-lease
+
+      - name: Trigger CI workflow
+        if: steps.check.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run ci.yml --ref ${{ env.TARGET_BRANCH }}
+
+      - name: Summary
+        if: steps.check.outputs.has_changes == 'true'
+        run: |
+          echo "## Rebase Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Fork branch:** ${{ env.TARGET_BRANCH }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Previous HEAD:** ${{ steps.check.outputs.fork_head }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **New HEAD:** ${{ steps.check.outputs.upstream_head }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **CI triggered:** Yes" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Docker image will be available shortly at:" >> $GITHUB_STEP_SUMMARY
+          echo "\`ghcr.io/${{ github.repository }}:canary\`" >> $GITHUB_STEP_SUMMARY
