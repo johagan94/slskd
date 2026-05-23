@@ -162,11 +162,25 @@ namespace slskd.Search
 
             async Task DoDeleteAsync(Search search)
             {
-                using var context = ContextFactory.CreateDbContext();
-                context.Searches.Remove(search);
-                context.SaveChanges();
+                var retries = 3;
+                while (retries > 0)
+                {
+                    try
+                    {
+                        using var context = ContextFactory.CreateDbContext();
+                        context.Searches.Remove(search);
+                        context.SaveChanges();
 
-                await SearchHub.BroadcastDeleteAsync(search);
+                        await SearchHub.BroadcastDeleteAsync(search);
+                        return;
+                    }
+                    catch (DbUpdateConcurrencyException)
+                    {
+                        retries--;
+                        if (retries == 0) throw;
+                        Thread.Sleep(50);
+                    }
+                }
             }
         }
 
@@ -273,9 +287,23 @@ namespace slskd.Search
 
             try
             {
-                using var context = ContextFactory.CreateDbContext();
-                context.Add(search);
-                context.SaveChanges();
+                var retries = 3;
+                while (retries > 0)
+                {
+                    try
+                    {
+                        using var context = ContextFactory.CreateDbContext();
+                        context.Add(search);
+                        context.SaveChanges();
+                        break;
+                    }
+                    catch (DbUpdateConcurrencyException)
+                    {
+                        retries--;
+                        if (retries == 0) throw;
+                        Thread.Sleep(50);
+                    }
+                }
 
                 searchCreated = true;
 
