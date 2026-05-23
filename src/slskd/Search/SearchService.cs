@@ -221,9 +221,23 @@ namespace slskd.Search
         /// <param name="search">The search to update.</param>
         public void Update(Search search)
         {
-            using var context = ContextFactory.CreateDbContext();
-            context.Update(search);
-            context.SaveChanges();
+            var retries = 3;
+            while (retries > 0)
+            {
+                try
+                {
+                    using var context = ContextFactory.CreateDbContext();
+                    context.Update(search);
+                    context.SaveChanges();
+                    return;
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    retries--;
+                    if (retries == 0) throw;
+                    Thread.Sleep(50);
+                }
+            }
         }
 
         /// <summary>
