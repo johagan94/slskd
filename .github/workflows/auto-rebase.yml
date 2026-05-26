@@ -24,7 +24,7 @@ jobs:
       actions: write
     steps:
       - name: Checkout fork
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -71,7 +71,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh workflow run ci.yml --ref ${{ env.TARGET_BRANCH }}
+          gh workflow run ci.yml --repo "${{ github.repository }}" --ref "${{ env.TARGET_BRANCH }}"
 
       - name: Summary
         if: steps.check.outputs.has_changes == 'true'
@@ -81,7 +81,7 @@ jobs:
           echo "- **Fork branch:** ${{ env.TARGET_BRANCH }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Previous HEAD:** ${{ steps.check.outputs.fork_head }}" >> $GITHUB_STEP_SUMMARY
           echo "- **New HEAD:** ${{ steps.check.outputs.upstream_head }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **CI triggered:** Yes" >> $GITHUB_STEP_SUMMARY
+          echo "- **CI triggered in fork:** Yes" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Docker image will be available shortly at:" >> $GITHUB_STEP_SUMMARY
           echo "\`ghcr.io/${{ github.repository }}:canary\`" >> $GITHUB_STEP_SUMMARY
